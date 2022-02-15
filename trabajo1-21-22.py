@@ -160,27 +160,9 @@ import numpy as np
 #          array([81, 91, 88]))
 # ------------------------------------------------------------------
 
-# import random
-from carga_datos import X_votos, y_votos, X_credito, y_credito
-# from sklearn.model_selection import train_test_split
 
-# X = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p"]
-# y = np.array([1, 0, 0, 2, 2, 1, 0, 2, 1, 1, 0, 2, 2, 2, 0, 2])
-# rng = np.random.default_rng()
-# res = rng.choice(X, 6, replace=False, shuffle=False)
-# print(res)
+from carga_datos import X_votos, y_votos, X_cancer, y_cancer
 
-# unique, counts = np.unique(y, return_counts=True)
-# freq = np.divide(counts, np.sum(counts))
-# print(freq)
-
-# y2 = np.where(y==0, freq[0]/5, y)
-# y2 = np.where(y==1, freq[1]/4, y2)
-# y2 = np.where(y==2, freq[2]/7, y2)
-# print(y2)
-
-# res = rng.choice(y, 6, replace=False, shuffle=False, p=y2)
-# print(res)
 
 def particion_entr_prueba(X, y, test=0.20):
     classes = np.unique(y)
@@ -195,41 +177,13 @@ def particion_entr_prueba(X, y, test=0.20):
 
         test_indices = np.sort(np.append(test_indices, cl_array[random_indexes]))
 
-    X_train = np.delete(X, test_indices)
-    y_train = np.delete(y, test_indices)
+    X_train = np.delete(X, test_indices, axis=0)
+    y_train = np.delete(y, test_indices, axis=0)
     X_test = np.array(X)[test_indices]
     y_test = np.array(y)[test_indices]
 
     return X_train, X_test, y_train, y_test
 
-# Xe_votos, Xp_votos, ye_votos, yp_votos = particion_entr_prueba(X_votos, y_votos, test=1/3)
-# Xe_credito, Xp_credito, ye_credito, yp_credito = particion_entr_prueba(X_credito, y_credito, test=0.4)
-# print(np.unique(y_votos, return_counts=True))
-# print(np.unique(ye_votos, return_counts=True))
-# print(np.unique(yp_votos, return_counts=True))
-
-# unique, counts = np.unique(y_votos, return_counts=True)
-# freq = np.divide(counts, np.sum(counts))
-# print(unique, counts)
-# print(freq)
-
-# total_freq = np.sum(freq * counts)
-# print(total_freq)
-
-# y2 = np.where(y_votos==unique[0], freq[0]/total_freq, y_votos)
-# y2 = np.where(y_votos==unique[1], freq[1]/total_freq, y2)
-# y2 = np.where(y2==unique[2], freq[2]/counts[2], y2)
-# print(y2.astype(float))
-
-# print(type(y2[0]))
-
-# test_size = round(len(y_votos) * 1/3)
-# print(test_size)
-
-# res = rng.choice(y_votos, test_size, replace=False, shuffle=False, p=y2.astype(float))
-# print(np.unique(y_credito, return_counts=True))
-# print(np.unique(ye_credito, return_counts=True))
-# print(np.unique(res, return_counts=True))
 
 # ===========================================
 # EJERCICIO 2: REGRESIÓN LOGÍSTICA MINI-BATCH
@@ -364,8 +318,6 @@ def particion_entr_prueba(X, y, test=0.20):
 class ClasificadorNoEntrenado(Exception): pass
 
 
-
-
 # Ejemplos de uso:
 # ----------------
 
@@ -402,7 +354,7 @@ class ClasificadorNoEntrenado(Exception): pass
 # Calculamos la proporción de aciertos en la predicción, usando la siguiente
 # función que llamaremos "rendimiento".
 
-def rendimiento(clasif,X,y):
+def rendimiento(clasif, X, y):
     return sum(clasif.clasifica(X)==y)/y.shape[0]
 
 # In [6]: rendimiento(RLMB_votos,Xp_votos,yp_votos)
@@ -432,16 +384,6 @@ def rendimiento(clasif,X,y):
 # In[11]: rendimiento(RLMB_cancer,Xp_cancer,yp_cancer)
 # Out[11]: 0.9557522123893806
 
-# X = np.array([[15, 67, 128, 12, 54, 78], [43, 58, 139, 10, 17, 1], [17, 69, 78, 165, 47, 32]])
-# std = np.std(X, axis=0)
-# mean = np.mean(X, axis=0)
-
-# random.sample(range(0, len(cl_array)), test_examples)
-# print(random.sample(range(0, 10), 6))
-# print(np.random.randint(0, 10, size=6))
-# rng = np.random.default_rng()
-# rints = rng.integers(low=0, high=10, size=6)
-# print(rints)
 
 def sigmoid(z):
     e_z = np.exp(-z)
@@ -462,26 +404,31 @@ class RegresionLogisticaMiniBatch():
         self.weights = None
         self.classes = None
 
-    def entrena(self, entr, clas_entr, n_epochs=1000, reiniciar_pesos=False):
-        if isinstance(clas_entr[0], str):
-            self.classes = np.unique(clas_entr)
 
-            # TODO: Es binario, solo hay dos clases
-            for index, cl in enumerate(self.classes):
-                clas_entr = np.where(clas_entr==cl, index, clas_entr)
+    def entrena(self, entr, clas_entr, n_epochs=1000, reiniciar_pesos=False):
+        self.classes = np.unique(clas_entr)
+
+        if isinstance(clas_entr[0], str):
+            # TODO: Por ahora solo es binaria
+            clas_entr = np.where(clas_entr==self.classes[0], 0, 1)
 
         if self.normalizacion is True:
-            # TODO: Excepcion si los datos no son numericos
+            if not isinstance(entr[0][0], int) and not isinstance(entr[0][0], float):
+                raise ValueError("Los datos del conjunto de entrenamiento no son numéricos: no se puede aplicar normalización.")
+
             std = np.std(entr, axis=0)
             mean = np.mean(entr, axis=0)
             entr = np.divide(np.subtract(entr, mean), std)
 
-        # TODO: Poner condición de que no se reinicien si reiniciar_pesos = True
         # TODO: Considerar el umbral (w0)
-        weights = 2 * self.rng.random(len(entr[0])) - 1 if self.pesos_iniciales is None else self.pesos_iniciales
-        rate = self.rate
+        if reiniciar_pesos is True or self.weights is None:
+            weights = 2 * self.rng.random(len(entr[0])) - 1 if self.pesos_iniciales is None else self.pesos_iniciales
+
+        else:
+            weights = self.weights
 
         for epoch in np.arange(n_epochs):
+            rate = self.rate * (1 / (1 + epoch)) if self.rate_decay is True else self.rate
             perm_index = self.rng.permutation(len(entr))
 
             batches = np.split(perm_index, np.arange(self.batch_tam, len(entr), self.batch_tam))
@@ -489,7 +436,6 @@ class RegresionLogisticaMiniBatch():
             for batch in batches:
                 X_batch = entr[batch]
                 y_batch = clas_entr[batch]
-                rate = self.rate * (1 / (1 + epoch)) if self.rate_decay is True else self.rate
 
                 dot = X_batch.dot(weights)
                 sigma = y_batch - sigmoid(dot)
@@ -503,6 +449,14 @@ class RegresionLogisticaMiniBatch():
         if self.weights is None:
             raise ClasificadorNoEntrenado()
 
+        if self.normalizacion is True:
+            if not isinstance(E[0][0], int) and not isinstance(E[0][0], float):
+                raise ValueError("Los datos del conjunto a clasificar no son numéricos: no se puede aplicar normalización.")
+
+            std = np.std(E, axis=0)
+            mean = np.mean(E, axis=0)
+            E = np.divide(np.subtract(E, mean), std)
+
         dot = np.array(E).dot(self.weights)
         probs_array = sigmoid(dot)
 
@@ -515,10 +469,40 @@ class RegresionLogisticaMiniBatch():
 
         probs_array = self.clasifica_prob(E)
 
-        classes_array = np.repeat(self.classes[0], len(E))
-        classes_array = np.where(probs_array >= 0.5, self.classes[1], classes_array)
+        y_pred = np.repeat(self.classes[0], len(E))
+        y_pred = np.where(probs_array >= 0.5, self.classes[1], y_pred)
 
-        return classes_array
+        return y_pred
+
+
+# Xe_votos, Xp_votos, ye_votos, yp_votos = particion_entr_prueba(X_votos, y_votos)
+
+# RLMB_votos = RegresionLogisticaMiniBatch()
+# RLMB_votos.entrena(Xe_votos, ye_votos)
+
+# votos_probs_array = RLMB_votos.clasifica_prob(Xp_votos)
+# print(votos_probs_array)
+
+# votos_y_pred = RLMB_votos.clasifica(Xp_votos)
+# print(votos_y_pred)
+
+# votos_score = rendimiento(RLMB_votos, Xp_votos, yp_votos)
+# print(votos_score)
+
+
+# Xe_cancer, Xp_cancer, ye_cancer, yp_cancer = particion_entr_prueba(X_cancer, y_cancer)
+
+# RLMB_cancer = RegresionLogisticaMiniBatch(normalizacion=True, rate_decay=True)
+# RLMB_cancer.entrena(Xe_cancer, ye_cancer)
+
+# cancer_probs_array = RLMB_cancer.clasifica_prob(Xp_cancer)
+# print(cancer_probs_array)
+
+# cancer_y_pred = RLMB_cancer.clasifica(Xp_cancer)
+# print(cancer_y_pred)
+
+# cancer_score = rendimiento(RLMB_cancer, Xp_cancer, yp_cancer)
+# print(cancer_score)
 
 
 # =================================================
@@ -720,7 +704,3 @@ class RegresionLogisticaMiniBatch():
 # Ajustar los parámetros de tamaño de batch, tasa de aprendizaje y
 # rate_decay para tratar de obtener un rendimiento aceptable (por encima del
 # 75% de aciertos sobre test).
-
-
-
-
