@@ -583,7 +583,7 @@ def particion_validacion_cruzada(X, y, n):
 
     rng = np.random.default_rng()
     classes = np.unique(y)
-    n_percentage = 1 / n
+    n_percentage = 1 / n # TODO: Comprobar qué pasa cuando n hace que la división no sea exacta
 
     for cl in classes:
         cl_array = np.where(y == cl)[0]
@@ -610,13 +610,6 @@ def particion_validacion_cruzada(X, y, n):
 
     folds_indexes = np.sort(folds_indexes)
 
-    # X_folds = np.array([])
-    # y_folds = np.array([])
-
-    # for f_indexes in folds_indexes:
-    #     X_folds = np.append(X_folds, X[f_indexes], axis=0)
-    #     y_folds = np.append(y_folds, y[f_indexes], axis=0)
-
     X_folds = X[folds_indexes]
     y_folds = y[folds_indexes]
 
@@ -624,7 +617,53 @@ def particion_validacion_cruzada(X, y, n):
 
 
 def rendimiento_validacion_cruzada(clase_clasificador, params, X, y, n=5):
-    pass
+    scores = np.array([])
+    RLMB_cv = clase_clasificador(**params)
+
+    X_folds, y_folds = particion_validacion_cruzada(X, y, n)
+
+    for iter in np.arange(n):
+        X_train = np.delete(X_folds, iter, axis=0)
+        X_train = np.reshape(X_train, (-1, X_train.shape[-1]))
+
+        y_train = np.delete(y_folds, iter, axis=0)
+        y_train = np.reshape(y_train, -1)
+
+        X_test = X_folds[iter]
+        y_test = y_folds[iter]
+
+        RLMB_cv.entrena(X_train, y_train)
+
+        score = rendimiento(RLMB_cv, X_test, y_test)
+        scores = np.append(scores, score, axis=None)
+
+    return np.mean(scores)
+
+
+# Se va a probar con 6 combinaciones distintas de parámetros: "rate_decay" True o False combinado con un "batch_tam" de 16, 32 o 64
+params_grid = [
+    {"batch_tam": 16, "rate_decay": True},
+    {"batch_tam": 32, "rate_decay": True},
+    {"batch_tam": 64, "rate_decay": True},
+    {"batch_tam": 16, "rate_decay": False},
+    {"batch_tam": 32, "rate_decay": False},
+    {"batch_tam": 64, "rate_decay": False},
+]
+
+cv_scores = np.array([])
+
+# for params in params_grid:
+#     cv_score = rendimiento_validacion_cruzada(RegresionLogisticaMiniBatch, params, Xe_cancer, ye_cancer, n=5)
+#     cv_scores = np.append(cv_scores, cv_score, axis=None)
+
+# print(cv_scores)
+
+# Salida cuando se ejecutó: [0.91208791 0.90769231 0.91208791 0.91428571 0.92307692 0.92087912]
+# Entonces, el rendimiento con validación cruzada más alto fue el de la combinación 5 (batch_tam=32 y rate_decay=False)
+# RLMB_cv = RegresionLogisticaMiniBatch(batch_tam=32, rate_decay=False)
+# RLMB_cv.entrena(Xe_cancer, ye_cancer)
+# RLMB_cv_score = rendimiento(RLMB_cv, Xp_cancer, yp_cancer)
+# print(RLMB_cv_score) # 0.9292035398230089
 
 
 # ===================================================
