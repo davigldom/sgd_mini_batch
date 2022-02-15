@@ -407,6 +407,16 @@ class RegresionLogisticaMiniBatch():
 
     def entrena(self, entr, clas_entr, n_epochs=1000, reiniciar_pesos=False):
         self.classes = np.unique(clas_entr)
+        pesos_iniciales = None
+
+        if self.pesos_iniciales is not None:
+            pesos_iniciales = np.array(self.pesos_iniciales)
+
+            if len(self.pesos_iniciales) != len(entr[0]) + 1:
+                raise ValueError("La longitud del array de pesos iniciales debe ser igual al número de características más 1 (para w0).")
+
+            if len(pesos_iniciales[(pesos_iniciales > 1) | (pesos_iniciales < -1)]) != 0:
+                raise ValueError("Los valores de los pesos iniciales deben estar entre -1 y 1.")
 
         if isinstance(clas_entr[0], str):
             # TODO: Por ahora solo es binaria
@@ -420,9 +430,8 @@ class RegresionLogisticaMiniBatch():
             mean = np.mean(entr, axis=0)
             entr = np.divide(np.subtract(entr, mean), std)
 
-        # TODO: Considerar el umbral (w0)
         if reiniciar_pesos is True or self.weights is None:
-            weights = 2 * self.rng.random(len(entr[0])) - 1 if self.pesos_iniciales is None else self.pesos_iniciales
+            weights = 2 * self.rng.random(len(entr[0]) + 1) - 1 if pesos_iniciales is None else pesos_iniciales
 
         else:
             weights = self.weights
@@ -434,7 +443,7 @@ class RegresionLogisticaMiniBatch():
             batches = np.split(perm_index, np.arange(self.batch_tam, len(entr), self.batch_tam))
 
             for batch in batches:
-                X_batch = entr[batch]
+                X_batch = np.insert(entr[batch], 0, 1, axis=1)
                 y_batch = clas_entr[batch]
 
                 dot = X_batch.dot(weights)
@@ -456,6 +465,8 @@ class RegresionLogisticaMiniBatch():
             std = np.std(E, axis=0)
             mean = np.mean(E, axis=0)
             E = np.divide(np.subtract(E, mean), std)
+
+        E = np.insert(E, 0, 1, axis=1)
 
         dot = np.array(E).dot(self.weights)
         probs_array = sigmoid(dot)
@@ -490,7 +501,7 @@ class RegresionLogisticaMiniBatch():
 # print(votos_score)
 
 
-# Xe_cancer, Xp_cancer, ye_cancer, yp_cancer = particion_entr_prueba(X_cancer, y_cancer)
+Xe_cancer, Xp_cancer, ye_cancer, yp_cancer = particion_entr_prueba(X_cancer, y_cancer)
 
 # RLMB_cancer = RegresionLogisticaMiniBatch(normalizacion=True, rate_decay=True)
 # RLMB_cancer.entrena(Xe_cancer, ye_cancer)
@@ -566,7 +577,54 @@ class RegresionLogisticaMiniBatch():
 #------------------------------------------------------------------------------
 
 
+def particion_validacion_cruzada(X, y, n):
+    folds_indexes = []
+    overflow = []
 
+    rng = np.random.default_rng()
+    classes = np.unique(y)
+    n_percentage = 1 / n
+
+    for cl in classes:
+        cl_array = np.where(y == cl)[0]
+        folds_size = round(len(cl_array) * n_percentage)
+        perm_indexes = rng.permutation(cl_array)
+
+        cl_folds = np.split(perm_indexes, np.arange(folds_size, len(cl_array), folds_size))
+
+        if len(cl_folds) > n:
+            overflow.extend(cl_folds[-1].tolist())
+            cl_folds = cl_folds[:-1]
+
+        if len(cl_folds[-1]) != len(cl_folds[-2]):
+            cl_folds[-1] = np.pad(cl_folds[-1], (0, len(cl_folds[-2])-len(cl_folds[-1])), constant_values=(-1))
+
+        if not folds_indexes:
+            folds_indexes = cl_folds
+
+        else:
+            folds_indexes = np.concatenate((folds_indexes, cl_folds), axis=1)
+
+        if np.where(folds_indexes[-1] == -1)[0].size > 0:
+            folds_indexes[-1] = np.concatenate((folds_indexes[-1][folds_indexes[-1] != -1], overflow), axis=None)
+
+    folds_indexes = np.sort(folds_indexes)
+
+    # X_folds = np.array([])
+    # y_folds = np.array([])
+
+    # for f_indexes in folds_indexes:
+    #     X_folds = np.append(X_folds, X[f_indexes], axis=0)
+    #     y_folds = np.append(y_folds, y[f_indexes], axis=0)
+
+    X_folds = X[folds_indexes]
+    y_folds = y[folds_indexes]
+
+    return X_folds, y_folds
+
+
+def rendimiento_validacion_cruzada(clase_clasificador, params, X, y, n=5):
+    pass
 
 
 # ===================================================
