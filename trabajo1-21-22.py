@@ -42,6 +42,7 @@
 # SE PIDE USAR NUMPY EN LA MEDIDA DE LO POSIBLE.
 
 import numpy as np
+import warnings
 
 # SE PENALIZARÁ el uso de bucles convencionales si la misma tarea se puede
 # hacer más eficiente con operaciones entre arrays que proporciona numpy.
@@ -160,25 +161,30 @@ import numpy as np
 #          array([81, 91, 88]))
 # ------------------------------------------------------------------
 
-
-from carga_datos import X_votos, y_votos, X_cancer, y_cancer
+# Primero se cargan todas las variables con los datos, para ser utilizadas a lo largo de los ejercicios
+from carga_datos import *
 
 
 def particion_entr_prueba(X, y, test=0.20):
-    classes = np.unique(y)
-    test_indices = np.empty(0, int)
-    rng = np.random.default_rng()
+    classes = np.unique(y) # Se obtiene las clases del conjunto de datos (ya sean 2 o más)
+    test_indices = np.empty(0, int) # Se crea un array vacío de tipo int para almacenar los índices de los ejemplos para test
+    rng = np.random.default_rng() # Se inicializa un generador de números random de numpy
 
-    for cl in classes:
-        cl_array = np.where(y == cl)[0]
-        test_examples = round(len(cl_array) * test)
+    for cl in classes: # Por cada una de las clases encontradas
+        cl_array = np.where(y == cl)[0] # Se obtienen los valores que sean igual a la clase a iterar
+        test_examples = round(len(cl_array) * test) # Se calcula cuantos ejemplos de esta clase hay que escoger para mantener la proporción
 
+        # Se escogen aleatoriamente los índices del array de la clase que se van a almacenar para test
         random_indexes = rng.choice(len(cl_array), test_examples, replace=False, shuffle=False)
 
+        # Se obtienen los índices del conjunto completo que van para test, se ordenan y se añaden al array correspondiente
         test_indices = np.sort(np.append(test_indices, cl_array[random_indexes]))
 
+    # Se borran los ejemplos con los índices que van para test, tanto en X como en y
     X_train = np.delete(X, test_indices, axis=0)
     y_train = np.delete(y, test_indices, axis=0)
+
+    # Se obtienen los ejemplos de test, a partir de sus índices
     X_test = np.array(X)[test_indices]
     y_test = np.array(y)[test_indices]
 
@@ -400,120 +406,124 @@ class RegresionLogisticaMiniBatch():
         self.rate_decay = rate_decay
         self.batch_tam = batch_tam
         self.pesos_iniciales = pesos_iniciales
-        self.rng = np.random.default_rng()
-        self.weights = None
-        self.classes = None
-
+        self.rng = np.random.default_rng() # Generador de número aleatorios que se utilizará
+        self.weights = None  # Variable para almacenar los pesos tras entrenamiento
+        self.classes = None # Variable para almacenar las clases originales del conjunto "y"
 
     def entrena(self, entr, clas_entr, n_epochs=1000, reiniciar_pesos=False):
-        self.classes = np.unique(clas_entr)
-        pesos_iniciales = None
+        self.classes = np.unique(clas_entr) # Se almacenan las clases que componen el conjunto de datos
+        pesos_iniciales = None # Se inicializa la variable para los pesos_iniciales
 
-        if self.pesos_iniciales is not None:
-            pesos_iniciales = np.array(self.pesos_iniciales)
+        if self.pesos_iniciales is not None: # Si se han introducido unos pesos iniciales al construir el clasificador
+            pesos_iniciales = np.array(self.pesos_iniciales) # Se guardan los pesos iniciales en su variable
 
-            if len(self.pesos_iniciales) != len(entr[0]) + 1:
+            if len(pesos_iniciales) != len(entr[0]) + 1: # Se comprueba que tenga la longitud adecuada
                 raise ValueError("La longitud del array de pesos iniciales debe ser igual al número de características más 1 (para w0).")
 
-            if len(pesos_iniciales[(pesos_iniciales > 1) | (pesos_iniciales < -1)]) != 0:
+            if len(pesos_iniciales[(pesos_iniciales > 1) | (pesos_iniciales < -1)]) != 0: # Se comprueba que estén entre los valores adecuados
                 raise ValueError("Los valores de los pesos iniciales deben estar entre -1 y 1.")
 
-        if isinstance(clas_entr[0], str):
-            # TODO: Por ahora solo es binaria
-            clas_entr = np.where(clas_entr==self.classes[0], 0, 1)
+        if isinstance(clas_entr[0], str): # Si las clases no son numéricas
+            clas_entr = np.where(clas_entr==self.classes[0], 0, 1) # Se cambia la clase negativa a 0 y la positiva a 1
 
-        if self.normalizacion is True:
-            if not isinstance(entr[0][0], int) and not isinstance(entr[0][0], float):
+        if self.normalizacion is True: # Si se ha indicado que se normalicen los datos
+            if not isinstance(entr[0][0], int) and not isinstance(entr[0][0], float): # Se comrpueba que los valores a normalizar sean números
                 raise ValueError("Los datos del conjunto de entrenamiento no son numéricos: no se puede aplicar normalización.")
 
-            std = np.std(entr, axis=0)
-            mean = np.mean(entr, axis=0)
-            entr = np.divide(np.subtract(entr, mean), std)
+            std = np.std(entr, axis=0) # Se calcula la desviación típica de cada una de las características
+            mean = np.mean(entr, axis=0) # Se calcula la media de cada una de las características
+            entr = np.divide(np.subtract(entr, mean), std) # Al array con los ejemplos se le resta el array con las medias y se divide entre el de las desviaciones
 
-        if reiniciar_pesos is True or self.weights is None:
+        if reiniciar_pesos is True or self.weights is None: # Si se ha indicado que se reinicien los pesos o es la primera vez que se entrena
+            # Se generan unos pesos aleatorios entre -1 y 1, o se cogen los pesos iniciales que se hayan introducido
             weights = 2 * self.rng.random(len(entr[0]) + 1) - 1 if pesos_iniciales is None else pesos_iniciales
 
-        else:
+        else: # En caso contrario, se empieza con los pesos anteriores
             weights = self.weights
 
-        for epoch in np.arange(n_epochs):
+        for epoch in np.arange(n_epochs): # Por cada uno de los epochs que se ha indicado
+            # Se actualiza la tasa de aprendizaje si se ha indicado que se realice un descenso
             rate = self.rate * (1 / (1 + epoch)) if self.rate_decay is True else self.rate
-            perm_index = self.rng.permutation(len(entr))
+            perm_index = self.rng.permutation(len(entr)) # Se realiza una permutación de los índices del conjunto de entrenamiento
 
+            # Se dividen los índices en batches del tamaño indicado
             batches = np.split(perm_index, np.arange(self.batch_tam, len(entr), self.batch_tam))
 
-            for batch in batches:
+            for batch in batches: # Por cada uno de los batches anteriores
+                # Se obtienen los ejemplos correspondientes de "X" a partir de los índices, insertando un 1 como x0 de cada ejemplo (para w0)
                 X_batch = np.insert(entr[batch], 0, 1, axis=1)
-                y_batch = clas_entr[batch]
+                y_batch = clas_entr[batch] # Se obtienen los ejemplos correspondientes de "y" a partir de los índices
 
+                # Se realiza la actualización de los pesos según la fórmula: wi <- wi + rate * sumatorio[(yj - sigmoide(w * xj)) * xij]
                 dot = X_batch.dot(weights)
                 sigma = y_batch - sigmoid(dot)
                 summation = sigma.dot(X_batch)
                 weights = weights + rate * summation
 
-        self.weights = weights
-
+        self.weights = weights # Tras el entrenamiento, se almacenan los pesos para utilizarlos en los métodos de clasificación
 
     def clasifica_prob(self, E):
-        if self.weights is None:
+        if self.weights is None: # Si no hay pesos almacenados, significa que no se ha entrenado el modelo
             raise ClasificadorNoEntrenado()
 
-        if self.normalizacion is True:
-            if not isinstance(E[0][0], int) and not isinstance(E[0][0], float):
+        if self.normalizacion is True: # Si se ha indicado que se quiere normalizar los datos
+            if not isinstance(E[0][0], int) and not isinstance(E[0][0], float): # Se comprueban que sean numéricos
                 raise ValueError("Los datos del conjunto a clasificar no son numéricos: no se puede aplicar normalización.")
 
+            # Se realiza el mismo procedimiento de normalización que en el método entrena()
             std = np.std(E, axis=0)
             mean = np.mean(E, axis=0)
             E = np.divide(np.subtract(E, mean), std)
 
+        # Se inserta un 1 como x0 de cada ejemplo, para que al realizar w * x quede como w0 * 1 + w1 * x1...
         E = np.insert(E, 0, 1, axis=1)
 
-        dot = np.array(E).dot(self.weights)
-        probs_array = sigmoid(dot)
+        # Para calcular las probabilidades de pertenecer a la clase positiva
+        dot = np.array(E).dot(self.weights) # Se realiza el producto escalar w * x de cada ejemplo
+        probs_array = sigmoid(dot) # Se aplica la función sigmoide
 
         return probs_array
 
-
     def clasifica(self, E):
-        if self.weights is None:
+        if self.weights is None: # Si no hay pesos almacenados, significa que no se ha entrenado el modelo
             raise ClasificadorNoEntrenado()
 
-        probs_array = self.clasifica_prob(E)
+        probs_array = self.clasifica_prob(E) # Se obtiene el array con las probabilidades de pertenecer a la clase positiva
 
-        y_pred = np.repeat(self.classes[0], len(E))
-        y_pred = np.where(probs_array >= 0.5, self.classes[1], y_pred)
+        # Se crea el array de prediciones con la clase positiva donde la probabilidad sea mayor o igual que 0.5, y la negativa en el resto de los casos
+        y_pred = np.where(probs_array >= 0.5, self.classes[1], self.classes[0])
 
         return y_pred
 
 
-# Xe_votos, Xp_votos, ye_votos, yp_votos = particion_entr_prueba(X_votos, y_votos)
+Xe_votos, Xp_votos, ye_votos, yp_votos = particion_entr_prueba(X_votos, y_votos)
 
-# RLMB_votos = RegresionLogisticaMiniBatch()
-# RLMB_votos.entrena(Xe_votos, ye_votos)
+RLMB_votos = RegresionLogisticaMiniBatch()
+RLMB_votos.entrena(Xe_votos, ye_votos)
 
-# votos_probs_array = RLMB_votos.clasifica_prob(Xp_votos)
-# print(votos_probs_array)
+votos_probs_array = RLMB_votos.clasifica_prob(Xp_votos)
+print(votos_probs_array)
 
-# votos_y_pred = RLMB_votos.clasifica(Xp_votos)
-# print(votos_y_pred)
+votos_y_pred = RLMB_votos.clasifica(Xp_votos)
+print(votos_y_pred)
 
-# votos_score = rendimiento(RLMB_votos, Xp_votos, yp_votos)
-# print(votos_score)
+votos_score = rendimiento(RLMB_votos, Xp_votos, yp_votos)
+print(votos_score) # OUT: 0.9770114942528736
 
 
 Xe_cancer, Xp_cancer, ye_cancer, yp_cancer = particion_entr_prueba(X_cancer, y_cancer)
 
-# RLMB_cancer = RegresionLogisticaMiniBatch(normalizacion=True, rate_decay=True)
-# RLMB_cancer.entrena(Xe_cancer, ye_cancer)
+RLMB_cancer = RegresionLogisticaMiniBatch(normalizacion=True, rate_decay=True)
+RLMB_cancer.entrena(Xe_cancer, ye_cancer)
 
-# cancer_probs_array = RLMB_cancer.clasifica_prob(Xp_cancer)
-# print(cancer_probs_array)
+cancer_probs_array = RLMB_cancer.clasifica_prob(Xp_cancer)
+print(cancer_probs_array)
 
-# cancer_y_pred = RLMB_cancer.clasifica(Xp_cancer)
-# print(cancer_y_pred)
+cancer_y_pred = RLMB_cancer.clasifica(Xp_cancer)
+print(cancer_y_pred)
 
-# cancer_score = rendimiento(RLMB_cancer, Xp_cancer, yp_cancer)
-# print(cancer_score)
+cancer_score = rendimiento(RLMB_cancer, Xp_cancer, yp_cancer)
+print(cancer_score) # OUT: 0.9823008849557522
 
 
 # =================================================
@@ -578,92 +588,68 @@ Xe_cancer, Xp_cancer, ye_cancer, yp_cancer = particion_entr_prueba(X_cancer, y_c
 
 
 def particion_validacion_cruzada(X, y, n):
+    # Listado para almacenar los listados con los índices de cada fold (no puede ser array de numpy ya que los folds pueden no tener la misma longitud)
     folds_indexes = []
-    overflow = []
 
-    rng = np.random.default_rng()
-    classes = np.unique(y)
-    n_percentage = 1 / n # TODO: Comprobar qué pasa cuando n hace que la división no sea exacta
+    rng = np.random.default_rng() # Se inicializa el generador de números aleatorios
+    classes = np.unique(y) # Se obtienen las distintas clases del conjunto de datos
 
-    for cl in classes:
-        cl_array = np.where(y == cl)[0]
-        folds_size = round(len(cl_array) * n_percentage)
-        perm_indexes = rng.permutation(cl_array)
+    for cl in classes: # Por cada una de las clases
+        cl_array = np.where(y == cl)[0] # Se obtiene un array con los ejemplos de dicha clase
+        perm_indexes = rng.permutation(cl_array) # Se realiza una permutación aleatoria de dicho array
 
-        cl_folds = np.split(perm_indexes, np.arange(folds_size, len(cl_array), folds_size))
+        cl_folds = np.array_split(perm_indexes, n) # Se divide en tantas partes como se haya indicado (n) para la validación cruzada
 
-        if len(cl_folds) > n:
-            overflow.extend(cl_folds[-1].tolist())
-            cl_folds = cl_folds[:-1]
-
-        if len(cl_folds[-1]) != len(cl_folds[-2]):
-            cl_folds[-1] = np.pad(cl_folds[-1], (0, len(cl_folds[-2])-len(cl_folds[-1])), constant_values=(-1))
-
-        if not folds_indexes:
-            folds_indexes = cl_folds
+        if len(folds_indexes) == 0: # Si es la primera clase
+            folds_indexes = cl_folds # Se almacena tal cual en la variable correspondiente
 
         else:
-            folds_indexes = np.concatenate((folds_indexes, cl_folds), axis=1)
+            # IMPORTANTE: Debido a que los folds pueden tener un número distinto de ejemplos (resultado de no ser divisible los ejemplos del entrenamiento entre n)
+            # el array o list de arrays de numpy pasa a ser de tipo "objeto", ya que los arrays multidimensionales de numpy deben tener la misma longitud para todas
+            # sus filas. Debido a que es del tipo "objeto", el atributo "shape" solo devuelve el número de filas, por lo que no se puede utilizar los métodos como
+            # concatenate o sort en el axis=1. Por tanto, la única solución es iterar con un bucle for convencional por cada una de las filas
+            folds_indexes = [np.sort(np.concatenate((folds_indexes[row], cl_folds[row]))) for row in range(len(cl_folds))]
 
-        if np.where(folds_indexes[-1] == -1)[0].size > 0:
-            folds_indexes[-1] = np.concatenate((folds_indexes[-1][folds_indexes[-1] != -1], overflow), axis=None)
-
-    folds_indexes = np.sort(folds_indexes)
-
-    X_folds = X[folds_indexes]
-    y_folds = y[folds_indexes]
+    # Se obtienen los listados ("X" e "y") con los ejemplos divididos entre los distintos folds
+    X_folds = [X[fold] for fold in folds_indexes]
+    y_folds = [y[fold] for fold in folds_indexes]
 
     return X_folds, y_folds
 
 
 def rendimiento_validacion_cruzada(clase_clasificador, params, X, y, n=5):
-    scores = np.array([])
-    RLMB_cv = clase_clasificador(**params)
+    warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) # Se desactiva los warnings de creación de arrays 2D con distintos tamaños
 
-    X_folds, y_folds = particion_validacion_cruzada(X, y, n)
+    scores = np.array([]) # Se crea un array para guardar los rendimientos obtenidos
+    RLMB_cv = clase_clasificador(**params) # Se crea el clasificador indicado con los parámetros indicados
+
+    X_folds, y_folds = particion_validacion_cruzada(X, y, n) # Se obtienen los ejemplos dividos entre los distintos folds
 
     for iter in np.arange(n):
-        X_train = np.delete(X_folds, iter, axis=0)
-        X_train = np.reshape(X_train, (-1, X_train.shape[-1]))
+        # IMPORTANTE: Al igual que en el método anterior, aquí también se tiene que iterar por cada fila mediante un for clásico, debido a que cabe la posibilidad
+        # de que las filas de este array multidimensional de numpy tengan distinto tamaño. Esto sería avisado mediante un warning por consola, al llamar al método
+        # np.delete sobre "X_folds" o "y_folds", pero se han deshabilitado dichos warnings para no ensuciar la salida por consola.
+        X_train_folds = np.delete(X_folds, iter, axis=0) # Se borra el fold que se utilizará en esta iteración para las pruebas
+        X_train = X_train_folds[0] # Se almacena el primer fold tal cual
+        for t_fold in X_train_folds[1:]: # Por cada uno de los otros folds
+            X_train = np.concatenate((X_train, t_fold)) # Se concatenan en X_train (el objetivo final es pasar de un conjunto de arrays 2D a uno solo)
 
-        y_train = np.delete(y_folds, iter, axis=0)
-        y_train = np.reshape(y_train, -1)
+        # Se realiza el mismo procedimiento para el conjunto "y"
+        y_train_folds = np.delete(y_folds, iter, axis=0)
+        y_train = y_train_folds[0]
+        for t_fold in y_train_folds[1:]:
+            y_train = np.concatenate((y_train, t_fold))
 
+        # Se obtienen los ejemplos (tanto el conjunto "X" como el "y") para pruebas que corresponden a esta iteración
         X_test = X_folds[iter]
         y_test = y_folds[iter]
 
-        RLMB_cv.entrena(X_train, y_train)
+        RLMB_cv.entrena(X_train, y_train) # Se entrena el clasificador creado con los conjuntos de entrenamiento de esta iteración
 
-        score = rendimiento(RLMB_cv, X_test, y_test)
-        scores = np.append(scores, score, axis=None)
+        score = rendimiento(RLMB_cv, X_test, y_test) # Se calcula el rendimiento del conjunto de pruebas de esta iteración
+        scores = np.append(scores, score, axis=None) # Se almacena el rendimiento en el array correspondiente
 
-    return np.mean(scores)
-
-
-# Se va a probar con 6 combinaciones distintas de parámetros: "rate_decay" True o False combinado con un "batch_tam" de 16, 32 o 64
-params_grid = [
-    {"batch_tam": 16, "rate_decay": True},
-    {"batch_tam": 32, "rate_decay": True},
-    {"batch_tam": 64, "rate_decay": True},
-    {"batch_tam": 16, "rate_decay": False},
-    {"batch_tam": 32, "rate_decay": False},
-    {"batch_tam": 64, "rate_decay": False},
-]
-
-cv_scores = np.array([])
-
-# for params in params_grid:
-#     cv_score = rendimiento_validacion_cruzada(RegresionLogisticaMiniBatch, params, Xe_cancer, ye_cancer, n=5)
-#     cv_scores = np.append(cv_scores, cv_score, axis=None)
-
-# print(cv_scores)
-
-# Salida cuando se ejecutó: [0.91208791 0.90769231 0.91208791 0.91428571 0.92307692 0.92087912]
-# Entonces, el rendimiento con validación cruzada más alto fue el de la combinación 5 (batch_tam=32 y rate_decay=False)
-# RLMB_cv = RegresionLogisticaMiniBatch(batch_tam=32, rate_decay=False)
-# RLMB_cv.entrena(Xe_cancer, ye_cancer)
-# RLMB_cv_score = rendimiento(RLMB_cv, Xp_cancer, yp_cancer)
-# print(RLMB_cv_score) # 0.9292035398230089
+    return np.mean(scores) # Se devuelve la media de los rendimientos obtenidos
 
 
 # ===================================================
@@ -684,7 +670,67 @@ cv_scores = np.array([])
 
 # Mostrar el proceso realizado en cada caso, y los rendimientos finales obtenidos.
 
+# Para que el tiempo de ejecución no sea demasiado excesivo, y considerando que no se especifica qué parámetros hay que ajustar y que
+# el rate se va a ajustar en el ejercicio 6.2, se va a probar con combinar "rate_decay" True o False con "batch_tam" entre 16, 32 y 64
+params_grid = [
+    {"batch_tam": 16, "rate_decay": True},
+    {"batch_tam": 32, "rate_decay": True},
+    {"batch_tam": 64, "rate_decay": True},
+    {"batch_tam": 16, "rate_decay": False},
+    {"batch_tam": 32, "rate_decay": False},
+    {"batch_tam": 64, "rate_decay": False},
+]
 
+# Votos de congresistas US ("Xe_votos", "ye_votos", "Xp_votos" e "yp_votos" se han obtenido en el Ejercicio 2)
+cv_scores = np.array([])
+
+for params in params_grid:
+    cv_score = rendimiento_validacion_cruzada(RegresionLogisticaMiniBatch, params, Xe_votos, ye_votos, n=5)
+    cv_scores = np.append(cv_scores, cv_score, axis=None)
+
+print(cv_scores) # OUT: [0.95983193 0.95109244 0.95689076 0.95117647 0.93689076 0.94806723]
+
+# Se puede observar que el rendimiento medio más alto lo hemos conseguido (en esta ejecución) para la combinación 1,
+# es decir, "batch_tam" igual a 16 y "rate_decay" igual a True. Vamos a enternar ahora el clasificador y ver su rendimiento
+# sobre el conjunto de pruebas
+RLMB_cv_votos = RegresionLogisticaMiniBatch(batch_tam=16, rate_decay=True)
+RLMB_cv_votos.entrena(Xe_votos, ye_votos)
+cv_votos_score = rendimiento(RLMB_cv_votos, Xp_votos, yp_votos)
+print(cv_votos_score) # OUT: 0.9770114942528736
+
+# Cáncer de mama ("Xe_cancer", "ye_cancer", "Xp_cancer" e "yp_cancer" se han obtenido en el Ejercicio 2)
+cv_scores = np.array([])
+
+for params in params_grid:
+    cv_score = rendimiento_validacion_cruzada(RegresionLogisticaMiniBatch, params, Xe_cancer, ye_cancer, n=5)
+    cv_scores = np.append(cv_scores, cv_score, axis=None)
+
+print(cv_scores) # OUT: [0.91889632 0.91227903 0.90590062 0.88380315 0.90355948 0.91877688]
+
+# Se puede observar que el rendimiento medio más alto lo hemos conseguido (en esta ejecución) también para la combinación 1,
+# es decir, "batch_tam" igual a 16 y "rate_decay" igual a True. Vamos a enternar ahora el clasificador y ver su rendimiento
+# sobre el conjunto de pruebas
+RLMB_cv_cancer = RegresionLogisticaMiniBatch(batch_tam=16, rate_decay=True)
+RLMB_cv_cancer.entrena(Xe_cancer, ye_cancer)
+cv_cancer_score = rendimiento(RLMB_cv_cancer, Xp_cancer, yp_cancer)
+print(cv_cancer_score) # OUT: 0.929203539823008
+
+# Críticas de películas en IMDB
+cv_scores = np.array([])
+
+for params in params_grid:
+    cv_score = rendimiento_validacion_cruzada(RegresionLogisticaMiniBatch, params, X_train_imdb, y_train_imdb, n=5)
+    cv_scores = np.append(cv_scores, cv_score, axis=None)
+
+print(cv_scores) # OUT: [0.80903698 0.81951327 0.81651449 0.77502816 0.7665606  0.77202068]
+
+# Se puede observar que el rendimiento medio más alto lo hemos conseguido (en esta ejecución) para la combinación 2,
+# es decir, "batch_tam" igual a 32 y "rate_decay" igual a True. Vamos a enternar ahora el clasificador y ver su rendimiento
+# sobre el conjunto de pruebas
+RLMB_cv_imdb = RegresionLogisticaMiniBatch(batch_tam=32, rate_decay=True)
+RLMB_cv_imdb.entrena(X_train_imdb, y_train_imdb)
+cv_imdb_score = rendimiento(RLMB_cv_imdb, X_test_imdb, y_test_imdb)
+print(cv_imdb_score) # OUT: 0.765
 
 
 # =====================================
@@ -747,7 +793,78 @@ cv_scores = np.array([])
 # >>> 0.9607843137254902
 # --------------------------------------------------------------------
 
+class RegresionLogisticaOvR():
+    def __init__(self, normalizacion=False, rate=0.1, rate_decay=False, batch_tam=64):
+        self.normalizacion = normalizacion
+        self.rate = rate
+        self.rate_decay = rate_decay
+        self.batch_tam = batch_tam
+        self.rng = np.random.default_rng() # Generador de números aleatorios
+        self.classes = None # Variable para almacenar las clases originales en el conjunto de datos
+        self.classifiers = None # Variable para almacenar cada uno de los clasificadores que se van a entrenar
 
+    def entrena(self, entr, clas_entr, n_epochs=1000, reiniciar_pesos=False):
+        classes = np.unique(clas_entr) # Se obtienen las clases del conjunto de datos
+        self.classes = np.unique(clas_entr) # Se almacenan también en la variable del modelo
+        self.classifiers = np.array([]) # Se inicializa un array para almacenar los distintos clasificadores
+
+        if isinstance(y_credito[0], str): # Si las clases vienen dadas por strings
+            classes = np.arange(len(self.classes)) # Se almacenan como valores numéricos en la variable correspondiente
+            condlist = [cl == clas_entr for cl in self.classes] # Se crea un listado de condiciones para buscar los valores en string
+            clas_entr = np.select(condlist, classes) # Se cambia cada string por su valor numérico
+
+        if self.normalizacion is True: # Si se ha indicado que se realice una normalización de los datos
+            if not isinstance(entr[0][0], int) and not isinstance(entr[0][0], float): # Se comrpueba que sean numéricos
+                raise ValueError("Los datos del conjunto de entrenamiento no son numéricos: no se puede aplicar normalización.")
+
+            # Se realiza el mismo procedimiento de normalización que en el ejercicio 2
+            std = np.std(entr, axis=0)
+            mean = np.mean(entr, axis=0)
+            entr = np.divide(np.subtract(entr, mean), std)
+
+        for cl in classes: # Por cada una de las clases (valores numéricos) que tenemos en el conjunto de datos
+            k_clas_entr = np.where(clas_entr==cl, 1, 0) # Se pone como 1 (positiva) la clase a iterar y el resto como 0 (negativa)
+            k_RLMB = RegresionLogisticaMiniBatch(False, self.rate, self.rate_decay, self.batch_tam, None) # Se crea un clasificador binario
+            k_RLMB.entrena(entr, k_clas_entr, n_epochs, reiniciar_pesos) # Se entrena con el array de clasificaciones modificado
+            self.classifiers = np.append(self.classifiers, k_RLMB) # Se almacena en el array de clasificadores
+
+    def clasifica(self, E):
+        # Si el array de clasificadores es None o está vacío, significa que no se ha entrenado el modelo
+        if self.classifiers is None or self.classifiers.size == 0:
+            raise ClasificadorNoEntrenado()
+
+        probs_matrix = np.array([]) # Se crea un array para almacenar la probabilidad de pertenecer a la clase positiva en cada uno de los clasificadores
+
+        for classifier in self.classifiers: # Por cada clasificador binario entrenado
+            probs_array = classifier.clasifica_prob(E) # Se obtiene el array con las probabilidades de pertenecer a la clase positiva
+
+            if probs_matrix.size == 0: # Si es el primer array a almacenar
+                probs_matrix = probs_array # Se guarda directamente en la variable
+
+            else: # En caso contrario
+                probs_matrix = np.vstack((probs_matrix, probs_array)) # Se utiliza el método vstack para crear una nueva fila en la matriz correspondiente
+
+        # El array con las prediciones vendrá dado por el índice del clasificador que mayor probabilidad ha devuelto de pertenecer a su clase positiva
+        y_pred = np.argmax(probs_matrix, axis=0)
+
+        if isinstance(self.classes[0], str): # Si las clases originalmente eran string
+            condlist = [cl == y_pred for cl in np.arange(len(self.classes))] # Se crea un listado de condiciones para buscar cada valor numérico de las clases
+            y_pred = np.select(condlist, self.classes) # Se cambian los valores numéricos de las clases por sus string
+
+        return y_pred
+
+
+Xe_iris, Xp_iris, ye_iris, yp_iris = particion_entr_prueba(X_iris, y_iris, test=1/3)
+
+RLOVR_iris = RegresionLogisticaOvR(rate=0.001, batch_tam=20)
+
+RLOVR_iris.entrena(Xe_iris, ye_iris)
+
+e_iris_score = rendimiento(RLOVR_iris, Xe_iris, ye_iris)
+print(e_iris_score) # OUT: 0.9595959595959596
+
+p_iris_score = rendimiento(RLOVR_iris, Xp_iris, yp_iris)
+print(p_iris_score) # OUT: 0.9803921568627451
 
 
 # ==============================================
@@ -769,8 +886,57 @@ cv_scores = np.array([])
 # Se pide implementar esta transformación (directamete, SIN USAR Scikt Learn ni Pandas).
 
 
+def one_hot(array):
+    # Por cada una de las filas del array traspuesto (de esta forma, cada fila sería una característica) que se quiere codificar como one_hot
+    for char_values in array.T:
+        # IMPORTANTE: Al ser string, numpy no compara adecuadamente la igualdad si invocas a np.unique de todo el array traspuesto, indicando
+        # axis=1. Es por ello que se itera mediante un for, además que facilita el realizar las siguientes operaciones
+        # Obtenemos los valores únicos que tiene dicha característica, así como los índices para volver a construir esta fila (de esta forma,
+        # tendremos un valor numérico que nos indicará qué valor único tenía cada elemento)
+        unique, unique_inverse = np.unique(char_values, return_inverse=True)
+
+        # Creamos una matriz identidad con el número de columnas y filas igual al número de valores únicos de la característica y obtenemos la
+        # fila que corresponda al valor numérico anterior (por ejemplo, si es 2 y teníamos 3 valores únicos obtendremos la última fila: [0 0 1])
+        char_onehot = np.eye(unique.shape[0])[unique_inverse]
+
+        # Añadimos cada codificación one_hot al final de su fila en el array que queríamos transformar, y borramos el primer elemento (funcionaría
+        # parecido a una pila: cogemos la primera característica, la codificamos en one_hot, la ponemos al final y borramos su valor inicial)
+        array = np.hstack((array, char_onehot))
+        array = np.delete(array, 0, axis=1)
+
+    return array.astype(float) # Devolvemos el array con los valores como números
 
 
+Xe_credito, Xp_credito, ye_credito, yp_credito = particion_entr_prueba(X_credito, y_credito)
+
+Xe_credito = one_hot(Xe_credito)
+Xp_credito = one_hot(Xp_credito)
+
+cv_scores = np.array([])
+
+for params in params_grid:
+    cv_score = rendimiento_validacion_cruzada(RegresionLogisticaOvR, params, Xe_credito, ye_credito, n=5)
+    cv_scores = np.append(cv_scores, cv_score, axis=None)
+
+print(cv_scores) # OUT: [0.74043842 0.74445084 0.72893483 0.71963084 0.70770349 0.70565392]
+
+# Se puede observar que el rendimiento medio más alto lo hemos conseguido (en esta ejecución) para la combinación 2,
+# es decir, "batch_tam" igual a 32 y "rate_decay" igual a True. Vamos a enternar ahora el clasificador y ver su rendimiento
+# sobre el conjunto de pruebas, modificando el "rate" de inicio para intentar mejorar el rendimiento
+RLMB_cv_credito = RegresionLogisticaOvR(batch_tam=32, rate_decay=True)
+RLMB_cv_credito.entrena(Xe_credito, ye_credito)
+cv_credito_score = rendimiento(RLMB_cv_credito, Xp_credito, yp_credito)
+print(cv_credito_score) # OUT: 0.7615384615384615
+
+# Como los valores han sido muy bajos, podemos probar a modificar el rate inicial para ver si conseguimos una mejora
+RLMB_cv_credito2 = RegresionLogisticaOvR(batch_tam=32, rate_decay=True, rate=0.01)
+RLMB_cv_credito2.entrena(Xe_credito, ye_credito)
+cv_credito_score2 = rendimiento(RLMB_cv_credito2, Xp_credito, yp_credito)
+print(cv_credito_score2) # OUT: 0.7307692307692307
+# Al parecer, no obtenemos mejora al cambiar la tasa de aprendizaje inicial. La falta de rendimiento se podría deber
+# a la separación realizada para entrenamiento y pruebas, o tal vez debido a que todas las características han sido
+# codificadas como one_hot y esta implementación de este clasificador no alcanza buen rendimiento en este caso, además
+# que se podría realizar un preprocesado para mejorar el rendimiento
 
 
 # ---------------------------------------------------------
@@ -801,3 +967,123 @@ cv_scores = np.array([])
 # Ajustar los parámetros de tamaño de batch, tasa de aprendizaje y
 # rate_decay para tratar de obtener un rendimiento aceptable (por encima del
 # 75% de aciertos sobre test).
+
+import zipfile
+
+def extract_zip(file_name, dest_path):
+    zip = zipfile.ZipFile(file_name, "r") # Se inicializa un objeto de tipo ZipFile, de solo lectura, a partir de la ruta indicada del archivo
+
+    try:
+        zip.extractall(path=dest_path) # Se extraen todos los archivos del zip en la ruta especificada
+
+    except:
+        # Si hay un error (habitualmente porque no existe el archivo o directorio) se lanza una excepción
+        raise FileNotFoundError("No se ha podido extraer correctamente el fichero digitdata.zip")
+
+    zip.close() # Se cierra el archivo .zip
+
+
+def extract_X_data(file_name):
+    data_file = open(file_name, "r") # Se abre el fichero correspondiente
+
+    file_content = data_file.read() # Se lee su contenido
+    # Se sustituyen los espacios en blanco por 0 y los "+" y "#" por 1
+    file_content = file_content.replace(" ", "0").replace("+", "1").replace("#", "1")
+    # Se separa el contenido por sus lineas y cada linea se separa en los distintos números que la componen
+    lines_list = [list(line) for line in file_content.splitlines()]
+
+    data_array = np.array(lines_list).astype(int) # Se crea un array de numpy (de tipo numérico) con los datos obtenidos
+
+    # Se redimensiona el array para que cada ejemplo lo compongan 28 filas con sus 28 valores en cada una (cada imagen es de 28x28)
+    data_array = data_array.reshape(int(data_array.shape[0]/28), 28*28)
+
+    data_file.close() # Se cierra el fichero
+
+    return data_array
+
+
+def extract_y_data(file_name):
+    data_file = open(file_name, "r") # Se abre el fichero correspondiente
+
+    file_content = data_file.read() # Se lee su contenido
+    lines_list = file_content.splitlines() # Se divide en cada una de las filas
+
+    data_array = np.array(lines_list).astype(int) # Se crea un array de numpy (de tipo numérico) con las filas anteriores
+
+    data_file.close() # Se cierra el archivo
+
+    return data_array
+
+
+# Extracción de los distintos conjuntos de datos utilizando los métodos anteriores
+# extract_zip("datos/digitdata.zip", "datos/digitdata/")
+X_train_digits = extract_X_data("datos/digitdata/trainingimages")
+y_train_digits = extract_y_data("datos/digitdata/traininglabels")
+X_test_digits = extract_X_data("datos/digitdata/testimages")
+y_test_digits = extract_y_data("datos/digitdata/testlabels")
+X_valid_digits = extract_X_data("datos/digitdata/validationimages")
+y_valid_digits = extract_y_data("datos/digitdata/validationlabels")
+
+# Como el tiempo de ejecución es muy grande, se va a probar a realizar una única ejecución con el conjunto de datos completo
+RLMB_digits = RegresionLogisticaOvR()
+RLMB_digits.entrena(X_train_digits, y_train_digits)
+
+valid_digits_score = rendimiento(RLMB_digits, X_valid_digits, y_valid_digits)
+print(valid_digits_score) # OUT: 0.82
+
+test_digits_score = rendimiento(RLMB_digits, X_test_digits, y_test_digits)
+print(test_digits_score) # OUT: 0.77
+
+# Entonces, para ajustar los parámetros, se va a utilizar un conjunto de datos menor (solo con el 10% de los ejemplos)
+X_train_digits = X_train_digits[:500]
+y_train_digits = y_train_digits[:500]
+X_test_digits = X_test_digits[:100]
+y_test_digits = y_test_digits[:100]
+X_valid_digits = X_valid_digits[:100]
+y_valid_digits = y_valid_digits[:100]
+
+# Primero vamos a probar a entrenar un modelo con sus parámetros por defecto
+RLMB_digits2 = RegresionLogisticaOvR()
+RLMB_digits2.entrena(X_train_digits, y_train_digits)
+
+valid_digits_score2 = rendimiento(RLMB_digits2, X_valid_digits, y_valid_digits)
+print(valid_digits_score2) # OUT: 0.86
+
+test_digits_score2 = rendimiento(RLMB_digits2, X_test_digits, y_test_digits)
+print(test_digits_score2) # OUT: 0.78
+
+# Con este primer intento, ya hemos conseguido alcanzar un 0,75 de rendimiento sobre pruebas, pero probemos ahora a cambiar
+# el tamaño de los batches y a que la tasa de aprendizaje decaiga en cada epoch
+RLMB_digits3 = RegresionLogisticaOvR(batch_tam=32, rate_decay=True)
+RLMB_digits3.entrena(X_train_digits, y_train_digits)
+
+valid_digits_score3 = rendimiento(RLMB_digits3, X_valid_digits, y_valid_digits)
+print(valid_digits_score3) # OUT: 0.85
+
+test_digits_score3 = rendimiento(RLMB_digits3, X_test_digits, y_test_digits)
+print(test_digits_score3) # OUT: 0.78
+
+# En este caso, no hemos conseguido una mejora en el conjunto de validación, aunque sí una muy leve sobre
+# el de pruebas. Vamos ahora a probar a variar la tasa de aprendizaje inicial, manteniendo los otros parámetros
+RLMB_digits4 = RegresionLogisticaOvR(batch_tam=32, rate_decay=True, rate=0.01)
+RLMB_digits4.entrena(X_train_digits, y_train_digits)
+
+valid_digits_score4 = rendimiento(RLMB_digits4, X_valid_digits, y_valid_digits)
+print(valid_digits_score4) # OUT: 0.7
+
+test_digits_score4 = rendimiento(RLMB_digits4, X_test_digits, y_test_digits)
+print(test_digits_score4) # OUT: 0.67
+
+# Ambos rendimientos han decaído bastante, por lo que ha sido una mala opción entrenar el modelo con estos parámetros.
+# Como último intento, veamos qué ocurre si cambiamos la tasa inicial, pero con rate_decay a False y un tam_batch de 64
+RLMB_digits5 = RegresionLogisticaOvR(batch_tam=64, rate_decay=False, rate=0.01)
+RLMB_digits5.entrena(X_train_digits, y_train_digits)
+
+valid_digits_score5 = rendimiento(RLMB_digits5, X_valid_digits, y_valid_digits)
+print(valid_digits_score5) # OUT: 0.84
+
+test_digits_score5 = rendimiento(RLMB_digits5, X_test_digits, y_test_digits)
+print(test_digits_score5) # OUT: 0.8
+
+# Al parecer este sí ha sido un buen ajuste, ya que hemos conseguido el mejor rendimiento hasta el momento para el
+# conjunto de pruebas, al mismo tiempo que obteniendo un rendimiento para validación casi como el mejor obtenido
